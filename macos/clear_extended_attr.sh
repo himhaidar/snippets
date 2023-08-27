@@ -11,3 +11,5 @@ for arg in "$@"; do
     fi
 done
 
+qlmanage -r
+qlmanage -r cache
