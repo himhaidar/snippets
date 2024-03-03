@@ -1,0 +1,17 @@
+[Unit]
+Description=Example web app service
+Requires=django.socket
+After=network.target
+
+[Service]
+User=django
+Group=www-data
+WorkingDirectory=/home/hey/www
+ExecStart=/home/hey/www/.venv/bin/gunicorn \
+          --access-logfile - \
+          --workers 2 \
+          --bind unix:/run/django.sock \
+          django.wsgi
+
+[Install]
+WantedBy=multi-user.target

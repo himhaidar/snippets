@@ -1,0 +1,8 @@
+[Unit]
+Description=Example web app socket
+
+[Socket]
+ListenStream=/run/django.sock
+
+[Install]
+WantedBy=sockets.target
