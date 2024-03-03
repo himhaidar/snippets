@@ -1,0 +1,78 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  django-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Setup Virtual Environment
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Install Dependencies
+        run: |
+          python -m venv .venv && source .venv/bin/activate && pip install -r config/pip/requirements.txt
+
+      - name: Create .env
+        run: |
+          echo "DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY" > .env
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+      - name: Setup SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: unnecessary
+
+      - name: Accept Host Fingerprint
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new user@examle.com "ls"
+          
+      - name: Test Run
+        run: |
+          .venv/bin/gunicorn django.wsgi -D
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+      - name: Remove .env
+        run: rm -rf .env
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@master
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+        with:
+          host: example.com
+          username: django
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: DJANGO_SECRET_KEY,TEST
+          script: |
+            cd $HOME/www/django
+            git pull origin master
+            echo "DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY" > .env
+            python -m venv .venv
+            source .venv/bin/activate
+            pip install -r config/pip/requirements.txt
+            python manage.py makemigrations && python manage.py migrate && deactivate
+            systemctl is-active --quiet django.socket && sudo systemctl stop django.socket
+            systemctl is-active --quiet django.service && sudo systemctl stop django.service
+            sudo cp -f config/services/django.{service,socket} /etc/systemd/system/
+            systemctl is-enabled django.socket || sudo systemctl enable django.socket
+            sudo systemctl restart django.{socket,service} && sudo systemctl daemon-reload
+            sudo cp -f config/nginx/example.com /etc/nginx/sites-available/example.com
+            sudo ln -sf /etc/nginx/sites-available/example.com /etc/nginx/sites-enabled/
+            sudo nginx -t && sudo systemctl reload nginx
