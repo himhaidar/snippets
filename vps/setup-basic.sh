@@ -4,12 +4,10 @@
 echo "Make sure you're running this file as 'root'."
 echo -e "This file will make changes to your system. Make sure\nyou are OK with the changes, before proceeding"
 
-export LC_ALL=en_US.UTF-8
-
 #-- Timezone --#
 echo "Setting up timezone"
 timedatectl set-ntp true
-timedatectl set-timzezone "Asia/Karachi"
+timedatectl set-timezone "Asia/Karachi"
 
 #-- Users and Groups --#
 NEW_USER=hey
@@ -20,12 +18,18 @@ if [ "$nu" == "y" ]; then
   echo "Setting up users and groups"
   useradd --create-home --groups sudo --shell "/bin/bash" $NEW_USER
   mkdir -p /home/$NEW_USER/.ssh && touch /home/$NEW_USER/.ssh/authorized_keys
+  sudo apt install -y rsync
   rsync --archive --chown=${USERNAME}:${USERNAME} /root/.ssh /home/${USERNAME}
 fi
 
-#-- fail2ban --#
+#-- Python --#
 echo "Setting up Python"
-apt-get update && apt-get install -y fail2ban
+apt-get update && apt-get install -y fail2ban python3 python3-pip python3-venv python-is-python3
+
+#-- Nginx --#
+echo "Setting up Nginx"
+apt-get install -y nginx
+rm -rf /etc/nginx/sites-enabled/default
 
 #-- Firewall --#
 echo -n "Do you want to setup firewall? (y/n): "; read -r fw
@@ -39,11 +43,6 @@ if [ "$fw" == "y" ]; then
   ufw allow 443
   ufw allow 'Nginx Full'
 fi
-
-#-- Nginx --#
-echo "Setting up Nginx"
-apt-get install -y nginx
-rm -rf /etc/nginx/sites-enabled/default
 
 #-- PostgreSQL --#
 echo -n "Do you want to setup PostgreSQL? (y/n): "; read -r _pg
@@ -60,7 +59,7 @@ fi
 echo -n "Do you want to setup Let's Encrypt certificates? (y/n): "; read -r le
 if [ "$le" == "y" ]; then
   apt-get install -y certbot python3-certbot-nginx
-  certbot --nginx -d haidarali.net -d www.haidarali.net --email himhaidar@icloud.com --agree-tos <<< "yes"
+  certbot --non-interactive --nginx -d haidarali.net -d www.haidarali.net --email himhaidar@icloud.com --agree-tos <<< "yes"
   systemctl enable certbot.timer --now
   systemctl status certbot.timer
 fi
